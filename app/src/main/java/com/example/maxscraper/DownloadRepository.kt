@@ -3,6 +3,7 @@ package com.example.maxscraper
 import android.app.DownloadManager
 import android.content.ContentValues
 import android.content.Context
+import android.content.Intent
 import android.database.Cursor
 import android.net.Uri
 import android.os.Build
@@ -84,6 +85,20 @@ object DownloadRepository {
                 // Publish to public Downloads
                 try {
                     val published = publishToDownloads(ctx, file, fileName, "video/mp4")
+
+                    // Mirror into the completed list so the UI can show the item immediately.
+                    runCatching {
+                        CompletedStore.add(
+                            ctx,
+                            title = fileName,
+                            uri = published,
+                            size = file.length(),
+                            time = System.currentTimeMillis()
+                        )
+                        // Trigger the completed tab refresh listener (same action it already watches).
+                        ctx.sendBroadcast(Intent(DownloadManager.ACTION_DOWNLOAD_COMPLETE))
+                    }
+
                     // Clean temp
                     runCatching { file.delete() }
                     DirectStatusStore.clear()
