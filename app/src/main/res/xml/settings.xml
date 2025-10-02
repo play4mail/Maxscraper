@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory android:title="@string/ms_pref_cat_storage">
+        <Preference
+            app:key="pref_save_to_movies"
+            android:title="@string/ms_pref_save_to_movies"
+            android:summary="@string/ms_pref_movies_recommended" />
+        <Preference
+            app:key="pref_pick_folder"
+            android:title="@string/ms_pref_pick_folder"
+            android:summary="@string/ms_pref_pick_folder_sum_none" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/ms_pref_cat_downloads">
+        <androidx.preference.SeekBarPreference
+            app:key="pref_max_concurrent"
+            android:title="@string/ms_pref_max_concurrent"
+            app:showSeekBarValue="true"
+            app:min="1"
+            android:max="25"
+            app:seekBarIncrement="1" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/ms_pref_cat_notifications">
+        <androidx.preference.SwitchPreferenceCompat
+            app:key="pref_sound"
+            android:title="@string/ms_pref_sound" />
+        <androidx.preference.SwitchPreferenceCompat
+            app:key="pref_vibrate"
+            android:title="@string/ms_pref_vibrate" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/ms_pref_cat_scraper">
+        <androidx.preference.EditTextPreference
+            app:key="pref_ignore_links"
+            android:title="@string/ms_pref_ignore_links_title"
+            android:dialogTitle="@string/ms_pref_ignore_links_title"
+            android:dialogMessage="@string/ms_pref_ignore_links_dialog_message"
+            app:useSimpleSummaryProvider="true" />
+    </PreferenceCategory>
+
+</PreferenceScreen>

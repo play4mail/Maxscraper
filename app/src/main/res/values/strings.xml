@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- App -->
+    <string name="app_name">Maxscraper</string>
+    <string name="title_settings">Settings</string>
+
+    <!-- Storage -->
+    <string name="pref_cat_storage">Storage</string>
+    <string name="pref_save_to_movies">Save to Movies folder</string>
+    <string name="pref_pick_folder">Save to custom folder…</string>
+    <string name="pref_movies_recommended">Recommended for most users</string>
+    <string name="pref_movies_selected">Using Movies folder</string>
+    <string name="pref_pick_folder_sum">Saving to: %1$s</string>
+    <string name="pref_pick_folder_sum_none">Choose a folder</string>
+
+    <!-- Downloads -->
+    <string name="pref_cat_downloads">Downloads</string>
+    <string name="pref_max_concurrent">Max concurrent downloads</string>
+    <string name="no_active_downloads">No active downloads</string>
+    <string name="no_completed_downloads">No completed downloads</string>
+    <string name="completed">Completed</string>
+
+
+    <!-- Notifications -->
+    <string name="pref_cat_notifications">Notifications</string>
+    <string name="pref_sound">Sound</string>
+    <string name="pref_vibrate">Vibrate</string>
+
+    <!-- Scraper -->
+    <string name="pref_cat_scraper">Scraper</string>
+    <string name="pref_ignore_links_title">Ignore links (one per line)</string>
+    <string name="pref_ignore_links_dialog_message">
+        Links or host snippets to ignore while detecting (e.g., doubleclick, /ads/). One per line.
+    </string>
+
+</resources>

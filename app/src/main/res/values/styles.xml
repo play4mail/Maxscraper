@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Material Components theme so MaterialToolbar inflates correctly -->
+    <style name="Theme.MaxScraper" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <!-- Core colors (make sure these exist in res/values/colors.xml) -->
+        <item name="colorPrimary">@color/ms_primary</item>
+        <item name="colorPrimaryVariant">@color/ms_primaryVariant</item>
+        <item name="colorSecondary">@color/ms_secondary</item>
+
+        <!-- Use the Android background attr (not colorBackground) -->
+        <item name="android:colorBackground">@color/ms_background</item>
+
+        <!-- Optional surface color for Material widgets -->
+        <item name="colorSurface">@color/ms_surface</item>
+
+        <!-- Status bar tint (API 21+) -->
+        <item name="android:statusBarColor">?attr/colorPrimaryVariant</item>
+    </style>
+</resources>

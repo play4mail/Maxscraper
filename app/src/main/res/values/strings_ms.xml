@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ms_title_settings">Settings</string>
+
+    <!-- Storage -->
+    <string name="ms_pref_cat_storage">Storage</string>
+    <string name="ms_pref_save_to_movies">Save to Movies folder</string>
+    <string name="ms_pref_pick_folder">Save to custom folder…</string>
+    <string name="ms_pref_movies_recommended">Recommended for most users</string>
+    <string name="ms_pref_movies_selected">Using Movies folder</string>
+    <string name="ms_pref_pick_folder_sum">Saving to: %1$s</string>
+    <string name="ms_pref_pick_folder_sum_none">Choose a folder</string>
+
+    <!-- Downloads -->
+    <string name="ms_pref_cat_downloads">Downloads</string>
+    <string name="ms_pref_max_concurrent">Max concurrent downloads</string>
+
+    <!-- Notifications -->
+    <string name="ms_pref_cat_notifications">Notifications</string>
+    <string name="ms_pref_sound">Sound</string>
+    <string name="ms_pref_vibrate">Vibrate</string>
+
+    <!-- Scraper -->
+    <string name="ms_pref_cat_scraper">Scraper</string>
+    <string name="ms_pref_ignore_links_title">Ignore links (one per line)</string>
+    <string name="ms_pref_ignore_links_dialog_message">
+        Links or host snippets to ignore while detecting (e.g., doubleclick, /ads/). One per line.
+    </string>
+</resources>
