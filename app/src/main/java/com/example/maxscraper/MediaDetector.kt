@@ -23,7 +23,9 @@ object MediaDetector {
     fun report(url: String) {
         val L = url.lowercase()
         if (L.endsWith(".ts")) return
-        if (!(L.contains(".m3u8") || L.endsWith(".mp4"))) return
+        val isHls = MediaFilter.isProbableHls(url)
+        val isMp4 = MediaFilter.isProbableMp4(url)
+        if (!isHls && !isMp4) return
         try {
             val host = URI(url).host?.lowercase()
             if (isIgnoredHost(host)) return
