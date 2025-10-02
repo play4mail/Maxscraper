@@ -24,6 +24,7 @@ import com.example.maxscraper.ui.MediaOption
 import com.example.maxscraper.ui.MediaPicker
 import org.json.JSONArray
 import java.net.URLDecoder
+import java.util.LinkedHashSet
 import java.util.Locale
 
 /**
@@ -148,30 +149,12 @@ class BrowserActivity : AppCompatActivity() {
     // -------------------- Extraction & picker --------------------
 
     private fun extractAndShowMediaFromPage() {
-        val js = """
-            (function(){
-                try{
-                    var urls = [];
-                    var vids = document.querySelectorAll('video,source');
-                    for (var i=0;i<vids.length;i++){
-                        var s = vids[i].src || vids[i].getAttribute('src') || '';
-                        if (s) urls.push(s);
-                    }
-                    var as = document.querySelectorAll('a[href]');
-                    for (var j=0;j<as.length;j++){
-                        var h = as[j].href || '';
-                        if (/\.(mp4|m3u8)(\?|$)/i.test(h)) urls.push(h);
-                    }
-                    urls = Array.from(new Set(urls));
-                    return JSON.stringify(urls);
-                }catch(e){ return '[]'; }
-            })();
-        """.trimIndent()
-
-        webView.evaluateJavascript(js) { raw ->
-            val urls = parseJsonStringArray(raw)
-            if (urls.isEmpty()) { toast("No videos found on this page"); return@evaluateJavascript }
-            showMediaPicker(urls)
+        fetchPageMedia { urls ->
+            if (urls.isEmpty()) {
+                toast("No videos found on this page")
+            } else {
+                showMediaPicker(urls)
+            }
         }
     }
 
@@ -273,28 +256,30 @@ class BrowserActivity : AppCompatActivity() {
     }
 
     private fun updateListCount() {
-        val js = """
-            (function(){
-              try{
-                var n=0;
-                var vids = document.querySelectorAll('video,source');
-                for (var i=0;i<vids.length;i++){
-                  var s = vids[i].src || vids[i].getAttribute('src') || '';
-                  if (s && (/\.(mp4|m3u8)(\?|$)/i.test(s) || /m3u8|mp4/i.test(s))) n++;
-                }
-                var as = document.querySelectorAll('a[href]');
-                for (var j=0;j<as.length;j++){
-                  var h = as[j].href || '';
-                  if (/\.(mp4|m3u8)(\?|$)/i.test(h)) n++;
-                }
-                return n;
-              }catch(e){ return 0; }
-            })();
-        """.trimIndent()
+        fetchPageMedia { urls ->
+            btnList.text = "List (${urls.size})"
+        }
+    }
 
-        webView.evaluateJavascript(js) { countStr ->
-            val n = countStr?.replace("\"", "")?.toIntOrNull() ?: 0
-            btnList.text = "List ($n)"
+    private fun fetchPageMedia(onResult: (List<String>) -> Unit) {
+        webView.evaluateJavascript(listExtractionJs) { raw ->
+            val fromDom = parseJsonStringArray(raw)
+            val merged = mergeWithDetector(fromDom)
+            onResult(merged)
+        }
+    }
+
+    private fun mergeWithDetector(domUrls: List<String>): List<String> {
+        val ordered = LinkedHashSet<String>()
+        MediaDetector.getCandidates().forEach { addIfValid(it, ordered) }
+        domUrls.forEach { addIfValid(it, ordered) }
+        return ordered.toList()
+    }
+
+    private fun addIfValid(url: String, bag: MutableSet<String>) {
+        val trimmed = url.trim()
+        if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+            bag += trimmed
         }
     }
 
@@ -350,5 +335,24 @@ class BrowserActivity : AppCompatActivity() {
 
     companion object {
         private const val MENU_LIST = 1001
+        private val listExtractionJs = """
+            (function(){
+                try{
+                    var urls = [];
+                    var vids = document.querySelectorAll('video,source');
+                    for (var i=0;i<vids.length;i++){
+                        var s = vids[i].src || vids[i].getAttribute('src') || '';
+                        if (s) urls.push(s);
+                    }
+                    var as = document.querySelectorAll('a[href]');
+                    for (var j=0;j<as.length;j++){
+                        var h = as[j].href || '';
+                        if (/\.(mp4|m3u8)(\?|$)/i.test(h)) urls.push(h);
+                    }
+                    urls = Array.from(new Set(urls));
+                    return JSON.stringify(urls);
+                }catch(e){ return '[]'; }
+            })();
+        """.trimIndent()
     }
 }
