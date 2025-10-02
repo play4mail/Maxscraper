@@ -36,7 +36,7 @@ class NetSnifferWebViewClient(
     private fun looksLikeMedia(u: String): Boolean {
         val L = u.lowercase()
         if (L.endsWith(".ts")) return false
-        if (!(L.endsWith(".mp4") || L.contains(".m3u8"))) return false
+        if (!(MediaFilter.isProbableMp4(u) || MediaFilter.isProbableHls(u))) return false
         val host = runCatching { Uri.parse(u).host?.lowercase() ?: "" }.getOrElse { "" }
         if (MediaDetector.isIgnoredHost(host)) return false
         return true
@@ -49,7 +49,8 @@ class NetSnifferWebViewClient(
               function post(u, playing){
                 try {
                   if (!u) return;
-                  if (u.indexOf('.m3u8')<0 && !u.toLowerCase().endsWith('.mp4')) return;
+                  var low = u ? u.toLowerCase() : '';
+                  if (low.indexOf('.m3u8')<0 && low.indexOf('.mp4')<0) return;
                   if (playing) window.DetectorBridge.playing(u); else window.DetectorBridge.hit(u);
                 } catch(e){}
               }

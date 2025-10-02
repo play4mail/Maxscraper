@@ -13,7 +13,6 @@ import android.webkit.WebChromeClient
 import android.webkit.WebChromeClient.CustomViewCallback
 import android.webkit.WebSettings
 import android.webkit.WebView
-import android.webkit.WebViewClient
 import android.widget.Button
 import android.widget.EditText
 import android.widget.FrameLayout
@@ -115,10 +114,10 @@ class BrowserActivity : AppCompatActivity() {
             }
         }
 
-        webView.webViewClient = object : WebViewClient() {
-            override fun onPageFinished(view: WebView?, url: String?) {
+        webView.webViewClient = object : NetSnifferWebViewClient(this, webView) {
+            override fun onPageFinished(view: WebView, url: String) {
                 super.onPageFinished(view, url)
-                if (!url.isNullOrBlank() && (url.startsWith("http://") || url.startsWith("https://"))) {
+                if (url.startsWith("http://") || url.startsWith("https://")) {
                     lastGoodUrl = url
                 }
                 // Capture og:image for thumbnails
