@@ -187,13 +187,19 @@ object DownloadRepository {
             return@withContext false
         }
 
+        // Remember the DownloadManager task so the receiver/settings/UI can react.
+        runCatching { DownloadTracker.add(ctx, id) }
+
         // Watch briefly for instant FAIL; if so, cancel & return false
         val start = System.currentTimeMillis()
         val maxMs = 3500L
         while (System.currentTimeMillis() - start < maxMs) {
             when (dm.singleStatus(id)) {
                 DownloadManager.STATUS_FAILED -> {
-                    runCatching { dm.remove(id) }
+                    runCatching {
+                        dm.remove(id)
+                        DownloadTracker.remove(ctx, id)
+                    }
                     return@withContext false
                 }
                 DownloadManager.STATUS_RUNNING,
