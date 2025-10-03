@@ -173,7 +173,7 @@ object DownloadRepository {
         fileName: String,
         referer: String?
     ): Boolean = withContext(Dispatchers.IO) {
-        val resolved = resolveFinalUrl(originalUrl, referer) ?: return@withContext false
+        val resolved = resolveFinalUrl(ctx, originalUrl, referer) ?: return@withContext false
         val dm = ctx.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
 
         val req = DownloadManager.Request(Uri.parse(resolved))
@@ -184,7 +184,7 @@ object DownloadRepository {
             .setAllowedOverRoaming(true)
             .setAllowedOverMetered(true)
 
-        req.addRequestHeader("User-Agent", defaultUA())
+        req.addRequestHeader("User-Agent", UserAgent.defaultForWeb(ctx))
         req.addRequestHeader("Accept", "*/*")
         req.addRequestHeader("Accept-Encoding", "identity")
         req.addRequestHeader("Accept-Language", "en-US,en;q=0.9")
@@ -244,7 +244,8 @@ object DownloadRepository {
     }
 
     // -------- Resolve final CDN URL (IG often redirects)
-    private fun resolveFinalUrl(startUrl: String, referer: String?): String? {
+    private fun resolveFinalUrl(ctx: Context, startUrl: String, referer: String?): String? {
+        val ua = UserAgent.defaultForWeb(ctx)
         var url = startUrl
         var hops = 0
         val cookieMgr = CookieManager.getInstance()
@@ -256,7 +257,7 @@ object DownloadRepository {
             val conn = (u.openConnection() as HttpURLConnection).apply {
                 instanceFollowRedirects = false
                 requestMethod = "GET"
-                setRequestProperty("User-Agent", defaultUA())
+                setRequestProperty("User-Agent", ua)
                 setRequestProperty("Accept", "*/*")
                 setRequestProperty("Accept-Language", "en-US,en;q=0.9")
                 setRequestProperty("Accept-Encoding", "identity")
@@ -301,6 +302,4 @@ object DownloadRepository {
         return host.contains("instagram.com") || host.contains("cdninstagram") || host.contains("fbcdn")
     }
 
-    private fun defaultUA(): String =
-        "Mozilla/5.0 (Linux; Android 13; App) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0 Mobile Safari/537.36"
 }
