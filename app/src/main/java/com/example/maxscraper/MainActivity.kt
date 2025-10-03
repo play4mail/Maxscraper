@@ -27,6 +27,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private lateinit var inputUrl: EditText
+    private lateinit var btnHome: Button
     private lateinit var btnOpenBrowser: Button
     private lateinit var btnClear: Button
     private lateinit var btnDownloads: Button
@@ -40,10 +41,13 @@ class MainActivity : AppCompatActivity() {
         setSupportActionBar(toolbar)
 
         inputUrl = findViewById(R.id.inputUrl)
+        btnHome = findViewById(R.id.btnHome)
         btnOpenBrowser = findViewById(R.id.btnOpenBrowser)
         btnClear = findViewById(R.id.btnClear)
         btnDownloads = findViewById(R.id.btnDownloads)
         btnSettings = findViewById(R.id.btnSettings)
+
+        btnHome.setOnClickListener { navigateHome() }
 
         requestPostNotificationsIfNeeded()
         requestMediaReadIfNeeded()

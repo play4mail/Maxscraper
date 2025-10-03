@@ -111,6 +111,10 @@ class PlayerActivity : AppCompatActivity() {
                 Gravity.TOP
             )
         }
+        val homeBtn = Button(this).apply {
+            text = getString(R.string.menu_home)
+            setOnClickListener { navigateHome() }
+        }
         val backBtn = ImageButton(this).apply {
             setImageResource(android.R.drawable.ic_media_previous)
             setBackgroundColor(Color.TRANSPARENT)
@@ -133,6 +137,7 @@ class PlayerActivity : AppCompatActivity() {
                 Toast.makeText(this@PlayerActivity, "Use the Completed tab to delete with options.", Toast.LENGTH_SHORT).show()
             }
         }
+        titleBar.addView(homeBtn)
         titleBar.addView(backBtn)
         titleBar.addView(titleView)
         titleBar.addView(deleteBtn)

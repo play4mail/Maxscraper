@@ -29,6 +29,7 @@ class M3u8Activity : AppCompatActivity() {
 
     private lateinit var recycler: RecyclerView
     private lateinit var downloadBtn: Button
+    private lateinit var btnHome: Button
     private val rows = mutableListOf<Row>()
     private lateinit var adapter: RowsAdapter
 
@@ -38,11 +39,14 @@ class M3u8Activity : AppCompatActivity() {
 
         recycler = findViewById(R.id.m3u8Recycler)
         downloadBtn = findViewById(R.id.downloadSelectedButton)
+        btnHome = findViewById(R.id.btnHome)
 
         adapter = RowsAdapter(rows)
         recycler.layoutManager = LinearLayoutManager(this)
         recycler.adapter = adapter
         recycler.addItemDecoration(DividerItemDecoration(this, DividerItemDecoration.VERTICAL))
+
+        btnHome.setOnClickListener { navigateHome() }
 
         val urls = intent.getStringArrayListExtra("EXTRA_M3U8_LIST") ?: arrayListOf()
         if (urls.isEmpty()) {
