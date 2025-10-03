@@ -92,7 +92,7 @@ class BrowserActivity : AppCompatActivity() {
             cacheMode = WebSettings.LOAD_DEFAULT
             mediaPlaybackRequiresUserGesture = false
             mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
-            userAgentString = defaultUA()
+            userAgentString = UserAgent.defaultForWeb(this@BrowserActivity)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) safeBrowsingEnabled = true
         }
 
@@ -342,9 +342,6 @@ class BrowserActivity : AppCompatActivity() {
 
     private fun toast(msg: String) =
         Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
-
-    private fun defaultUA(): String =
-        "Mozilla/5.0 (Linux; Android 13; App) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0 Mobile Safari/537.36"
 
     companion object {
         private const val MENU_LIST = 1001
