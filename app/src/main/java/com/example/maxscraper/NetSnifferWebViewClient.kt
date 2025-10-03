@@ -8,7 +8,7 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 
-class NetSnifferWebViewClient(
+open class NetSnifferWebViewClient(
     private val ctx: Context,
     private val webView: WebView
 ) : WebViewClient() {
