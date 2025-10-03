@@ -43,6 +43,7 @@ class BrowserActivity : AppCompatActivity() {
 
     private lateinit var toolbar: Toolbar
     private lateinit var btnHome: Button
+    private lateinit var btnRefresh: Button
     private lateinit var btnList: Button
     private lateinit var webView: WebView
     private lateinit var fullscreenContainer: FrameLayout
@@ -63,19 +64,26 @@ class BrowserActivity : AppCompatActivity() {
         toolbar = findViewById(R.id.toolbar)
         btnHome = findViewById(R.id.btnHome)
         btnList = findViewById(R.id.btnList)
+        btnRefresh = findViewById(R.id.btnRefresh)
         webView = findViewById(R.id.webView)
         fullscreenContainer = findViewById(R.id.fullscreen_container)
 
         setSupportActionBar(toolbar)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
+        toolbar.setNavigationOnClickListener {
+            webView.stopLoading()
+            navigateHome()
+        }
 
         btnHome.setOnClickListener {
-            webView.loadUrl("https://www.instagram.com")
+            webView.stopLoading()
+            navigateHome()
         }
         btnList.setOnClickListener {
             extractAndShowMediaFromPage()
         }
-        btnList.text = "List (0)"
+        btnRefresh.setOnClickListener { webView.reload() }
+        btnList.text = "${getString(R.string.menu_list)} (0)"
 
         webView.settings.apply {
             javaScriptEnabled = true
@@ -133,14 +141,20 @@ class BrowserActivity : AppCompatActivity() {
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         // Optional overflow "List" action (works even if no btnList in layout)
-        menu.add(0, MENU_LIST, 0, "List")
+        menu.add(0, MENU_REFRESH, 0, getString(R.string.menu_refresh))
+        menu.add(0, MENU_LIST, 1, getString(R.string.menu_list))
         return super.onCreateOptionsMenu(menu)
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
+            MENU_REFRESH -> { webView.reload(); true }
             MENU_LIST -> { extractAndShowMediaFromPage(); true }
-            android.R.id.home -> { onBackPressedDispatcher.onBackPressed(); true }
+            android.R.id.home -> {
+                webView.stopLoading()
+                navigateHome()
+                true
+            }
             else -> super.onOptionsItemSelected(item)
         }
     }
@@ -256,7 +270,7 @@ class BrowserActivity : AppCompatActivity() {
 
     private fun updateListCount() {
         fetchPageMedia { urls ->
-            btnList.text = "List (${urls.size})"
+            btnList.text = "${getString(R.string.menu_list)} (${urls.size})"
         }
     }
 
@@ -334,6 +348,7 @@ class BrowserActivity : AppCompatActivity() {
 
     companion object {
         private const val MENU_LIST = 1001
+        private const val MENU_REFRESH = 1002
         private val listExtractionJs = """
             (function(){
                 try{

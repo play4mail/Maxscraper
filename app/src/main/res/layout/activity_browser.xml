@@ -27,13 +27,20 @@
                     android:id="@+id/btnHome"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Home" />
+                    android:text="@string/menu_home" />
+
+                <Button
+                    android:id="@+id/btnRefresh"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="@string/menu_refresh" />
 
                 <Button
                     android:id="@+id/btnList"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="List (0)"
+                    android:text="@string/menu_list"
                     android:layout_marginStart="8dp"/>
             </LinearLayout>
         </androidx.appcompat.widget.Toolbar>

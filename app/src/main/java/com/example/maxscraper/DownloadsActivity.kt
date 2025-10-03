@@ -3,10 +3,12 @@ package com.example.maxscraper
 import android.os.Bundle
 import android.widget.Button
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.widget.Toolbar
 import androidx.fragment.app.commit
 
 class DownloadsActivity : AppCompatActivity() {
 
+    private lateinit var btnHome: Button
     private lateinit var btnActive: Button
     private lateinit var btnCompleted: Button
 
@@ -14,9 +16,16 @@ class DownloadsActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_downloads)
 
+        val toolbar = findViewById<Toolbar>(R.id.toolbar)
+        setSupportActionBar(toolbar)
+        supportActionBar?.setDisplayHomeAsUpEnabled(true)
+        toolbar.setNavigationOnClickListener { navigateHome() }
+
+        btnHome = findViewById(R.id.btnHome)
         btnActive = findViewById(R.id.btnActive)
         btnCompleted = findViewById(R.id.btnCompleted)
 
+        btnHome.setOnClickListener { navigateHome() }
         btnActive.setOnClickListener {
             supportFragmentManager.commit { replace(R.id.content, ActiveFragment(), TAG_ACTIVE) }
             updateButtons(true)
