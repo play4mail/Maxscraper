@@ -5,6 +5,8 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
@@ -51,6 +53,11 @@ class BrowserActivity : AppCompatActivity() {
     private var lastGoodUrl: String? = null
     private var lastOgImage: String? = null
 
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val detectorListener: () -> Unit = {
+        mainHandler.post { updateListCount() }
+    }
+
     // WebChrome fullscreen support
     private var customView: View? = null
     private var customViewCallback: CustomViewCallback? = null
@@ -84,6 +91,7 @@ class BrowserActivity : AppCompatActivity() {
         }
         btnRefresh.setOnClickListener { webView.reload() }
         btnList.text = "${getString(R.string.menu_list)} (0)"
+        MediaDetector.addListener(detectorListener)
 
         webView.settings.apply {
             javaScriptEnabled = true
@@ -137,6 +145,11 @@ class BrowserActivity : AppCompatActivity() {
 
         val initial = intent?.dataString ?: "https://www.instagram.com"
         webView.loadUrl(initial)
+    }
+
+    override fun onDestroy() {
+        MediaDetector.removeListener(detectorListener)
+        super.onDestroy()
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
