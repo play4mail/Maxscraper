@@ -15,8 +15,20 @@ object MediaDetector {
         "doppiocdn.com","doppiocdn.org","hesads.akamaized.net","dmxleo.dailymotion.com"
     )
     private val map = ConcurrentHashMap<String, MediaHit>() // url -> hit
+    private val listeners = java.util.concurrent.CopyOnWriteArraySet<() -> Unit>()
 
-    fun clear() = map.clear()
+    fun clear() {
+        map.clear()
+        notifyListeners()
+    }
+
+    fun addListener(listener: () -> Unit) {
+        listeners += listener
+    }
+
+    fun removeListener(listener: () -> Unit) {
+        listeners -= listener
+    }
 
     fun isIgnoredHost(h: String?): Boolean = h != null && ignoredHosts.any { h.endsWith(it) }
 
@@ -30,12 +42,17 @@ object MediaDetector {
             val host = URI(url).host?.lowercase()
             if (isIgnoredHost(host)) return
         } catch (_: Throwable) {}
-        map.putIfAbsent(url, MediaHit(url))
+        val added = map.putIfAbsent(url, MediaHit(url)) == null
+        if (added) notifyListeners()
     }
 
     fun reportPlaying(url: String) {
         report(url)
-        map[url]?.let { it.playing = true }
+        val hit = map[url]
+        if (hit != null && !hit.playing) {
+            hit.playing = true
+            notifyListeners()
+        }
     }
 
     fun getCandidates(): List<String> {
@@ -43,5 +60,9 @@ object MediaDetector {
             compareByDescending<MediaHit> { it.playing }
                 .thenByDescending { it.ts }
         ).map { it.url }
+    }
+
+    private fun notifyListeners() {
+        listeners.forEach { it.invoke() }
     }
 }
