@@ -389,7 +389,10 @@ class BrowserActivity : AppCompatActivity() {
 
         return built
             .distinctBy { it.first.url }
-            .sortedByDescending { it.second }
+            .sortedWith(
+                compareByDescending<Pair<MediaOption, Long>> { it.first.isHls }
+                    .thenByDescending { it.second }
+            )
             .map { it.first }
     }
 
