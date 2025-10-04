@@ -2,7 +2,6 @@ package com.example.maxscraper.net
 
 import android.content.Context
 import android.net.Uri
-import android.webkit.CookieManager
 import android.webkit.WebSettings
 import kotlinx.coroutines.*
 import okhttp3.Request
@@ -10,12 +9,13 @@ import okio.buffer
 import okio.sink
 import java.io.File
 import java.io.RandomAccessFile
+import java.nio.channels.FileChannel
 import java.util.concurrent.CancellationException
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.max
 import com.example.maxscraper.Http
-import java.nio.channels.FileChannel
+import com.example.maxscraper.gatherCookies
 
 object ParallelDownloader {
 
@@ -154,7 +154,6 @@ object ParallelDownloader {
 
     private fun defaultHeaders(ctx: Context, url: String, referer: String?): Map<String, String> {
         val ua = WebSettings.getDefaultUserAgent(ctx)
-        val cookie = CookieManager.getInstance().getCookie(url)
         val h = mutableMapOf(
             "User-Agent" to ua,
             "Accept" to "*/*",
@@ -169,7 +168,7 @@ object ParallelDownloader {
                 h["Origin"] = origin
             } catch (_: Throwable) {}
         }
-        if (!cookie.isNullOrBlank()) h["Cookie"] = cookie
+        gatherCookies(url, referer)?.let { h["Cookie"] = it }
         return h
     }
 
