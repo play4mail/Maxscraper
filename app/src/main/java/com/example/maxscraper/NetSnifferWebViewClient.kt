@@ -1,12 +1,16 @@
 package com.example.maxscraper
 
+import android.content.ActivityNotFoundException
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.webkit.JavascriptInterface
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Toast
+import java.util.Locale
 
 open class NetSnifferWebViewClient(
     private val ctx: Context,
@@ -25,6 +29,19 @@ open class NetSnifferWebViewClient(
     override fun onPageFinished(view: WebView, url: String) {
         super.onPageFinished(view, url)
         injectDetectorJs()
+    }
+
+    override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && handleExternalSchemes(request.url.toString())) {
+            return true
+        }
+        return super.shouldOverrideUrlLoading(view, request)
+    }
+
+    @Suppress("OVERRIDE_DEPRECATION")
+    override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean {
+        if (handleExternalSchemes(url)) return true
+        return super.shouldOverrideUrlLoading(view, url)
     }
 
     override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): android.webkit.WebResourceResponse? {
@@ -83,8 +100,53 @@ open class NetSnifferWebViewClient(
         if (Build.VERSION.SDK_INT >= 19) webView.evaluateJavascript(js, null) else webView.loadUrl("javascript:$js")
     }
 
+    private fun handleExternalSchemes(rawUrl: String?): Boolean {
+        val url = rawUrl?.trim().orEmpty()
+        if (url.isEmpty()) return false
+
+        val uri = runCatching { Uri.parse(url) }.getOrNull() ?: return false
+        val scheme = uri.scheme?.lowercase(Locale.US)
+
+        if (scheme.isNullOrEmpty()) return false
+        if (scheme in allowedInWebView) return false
+
+        val intent = if (url.startsWith("intent:", ignoreCase = true)) {
+            runCatching { Intent.parseUri(url, Intent.URI_INTENT_SCHEME) }.getOrNull()
+                ?.apply {
+                    addCategory(Intent.CATEGORY_BROWSABLE)
+                    component = null
+                }
+        } else {
+            Intent(Intent.ACTION_VIEW, uri)
+        }
+
+        if (intent == null) return false
+
+        return try {
+            ctx.startActivity(intent)
+            true
+        } catch (_: ActivityNotFoundException) {
+            Toast.makeText(ctx, "No app can handle this link", Toast.LENGTH_SHORT).show()
+            true
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
     inner class Bridge {
         @JavascriptInterface fun hit(u: String) { MediaDetector.report(u) }
         @JavascriptInterface fun playing(u: String) { MediaDetector.reportPlaying(u) }
+    }
+
+    private companion object {
+        private val allowedInWebView = setOf(
+            "http",
+            "https",
+            "file",
+            "about",
+            "javascript",
+            "data",
+            "blob"
+        )
     }
 }
