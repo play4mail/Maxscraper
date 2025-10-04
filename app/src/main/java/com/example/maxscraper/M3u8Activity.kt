@@ -107,7 +107,8 @@ class M3u8Activity : AppCompatActivity() {
 
     inner class RowsAdapter(private val data: MutableList<Row>) : RecyclerView.Adapter<VH>() {
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
-            val v = LayoutInflater.from(parent.context).inflate(R.layout.item_media_option, parent, false)
+            val v = LayoutInflater.from(parent.context)
+                .inflate(R.layout.item_media_option_selectable, parent, false)
             return VH(v)
         }
         override fun onBindViewHolder(holder: VH, position: Int) = holder.bind(data[position])
