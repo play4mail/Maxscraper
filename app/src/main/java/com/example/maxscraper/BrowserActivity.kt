@@ -302,10 +302,12 @@ class BrowserActivity : AppCompatActivity() {
     }
 
     private fun filterPlayableMedia(foundUrls: List<String>): List<String> {
-        val normalized = foundUrls.mapNotNull { normaliseMediaUrl(it) }
-        val mp4s = normalized.filter { it.contains(".mp4", true) }
-        val hls = normalized.filter { it.contains(".m3u8", true) }
-        return (if (mp4s.isNotEmpty()) mp4s else hls)
+        val trimmed = foundUrls.map { it.trim() }
+        val mp4s = trimmed.filter { it.contains(".mp4", true) }
+        val hls = trimmed.filter { it.contains(".m3u8", true) }
+        val prioritized = if (mp4s.isNotEmpty()) mp4s else hls
+        return prioritized
+            .mapNotNull { normaliseMediaUrl(it) }
             .distinctBy { runCatching { Uri.parse(it).path ?: it }.getOrElse { it } }
     }
 
@@ -458,7 +460,9 @@ class BrowserActivity : AppCompatActivity() {
     private fun normaliseMediaUrl(raw: String): String? {
         if (raw.isBlank()) return null
         val trimmed = raw.trim()
-        if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) return null
+        if (!trimmed.startsWith("http://", ignoreCase = true) &&
+            !trimmed.startsWith("https://", ignoreCase = true)
+        ) return null
         return normaliseInstagramRanges(trimmed)
     }
 
