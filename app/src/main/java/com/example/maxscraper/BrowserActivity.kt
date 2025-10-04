@@ -130,7 +130,7 @@ class BrowserActivity : AppCompatActivity() {
             }
         }
 
-        webView.webViewClient = object : NetSnifferWebViewClient(this, webView) {
+        webView.webViewClient = object : NetSnifferWebViewClient(this@BrowserActivity, webView) {
             override fun onPageFinished(view: WebView, url: String) {
                 super.onPageFinished(view, url)
                 if (url.startsWith("http://") || url.startsWith("https://")) {
