@@ -2,6 +2,8 @@ package com.example.maxscraper.ui
 
 import android.content.Context
 import androidx.appcompat.app.AlertDialog
+import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.Lifecycle
 import com.example.maxscraper.R
 
 /**
@@ -30,8 +32,27 @@ object MediaPicker {
             metaId = metaId
         )
 
-        val dlg = adapter.asDialog(AlertDialog.Builder(ctx).setTitle(title))
-        dlg.setOnDismissListener { adapter.cleanup() }
-        dlg.show()
+        val dialog = adapter.asDialog(AlertDialog.Builder(ctx).setTitle(title))
+        dialog.setOnDismissListener { adapter.cleanup() }
+
+        val activity = ctx as? AppCompatActivity
+        if (activity != null) {
+            if (activity.isFinishing || activity.isDestroyed ||
+                !activity.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
+            ) {
+                adapter.cleanup()
+                return
+            }
+
+            dialog.setOnShowListener {
+                if (activity.isFinishing || activity.isDestroyed ||
+                    !activity.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
+                ) {
+                    dialog.dismiss()
+                }
+            }
+        }
+
+        dialog.show()
     }
 }
