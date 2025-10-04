@@ -46,7 +46,8 @@ class MediaOptionAdapter(
 ) : RecyclerView.Adapter<MediaOptionAdapter.VH>() {
 
     private val scope = CoroutineScope(Dispatchers.IO + Job())
-    private val thumbCache = ConcurrentHashMap<String, Bitmap?>()
+    private val thumbCache = ConcurrentHashMap<String, Bitmap>()
+    private val missingThumbs = ConcurrentHashMap.newKeySet<String>()
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
         val v = LayoutInflater.from(parent.context).inflate(rowLayout, parent, false)
@@ -100,6 +101,7 @@ class MediaOptionAdapter(
     /** Call when dialog dismisses to stop background work. */
     fun cleanup() {
         thumbCache.clear()
+        missingThumbs.clear()
         scope.cancel()
     }
 
@@ -115,13 +117,17 @@ class MediaOptionAdapter(
     }
 
     private fun loadThumbnail(option: MediaOption): Bitmap? {
-        val cached = thumbCache[option.url]
-        if (cached != null || thumbCache.containsKey(option.url)) return cached
+        thumbCache[option.url]?.let { return it }
+        if (missingThumbs.contains(option.url)) return null
 
         val bmp = option.thumbUrl?.let { fetchImageBitmap(it) }
             ?: fetchVideoBitmap(option)
 
-        thumbCache[option.url] = bmp
+        if (bmp != null) {
+            thumbCache[option.url] = bmp
+        } else {
+            missingThumbs += option.url
+        }
         return bmp
     }
 

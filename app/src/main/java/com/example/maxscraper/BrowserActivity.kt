@@ -32,6 +32,7 @@ import java.net.URLDecoder
 import java.util.LinkedHashMap
 import java.util.LinkedHashSet
 import java.util.Locale
+import kotlin.jvm.Volatile
 
 /**
  * In-app browser wired to:
@@ -57,6 +58,7 @@ class BrowserActivity : AppCompatActivity() {
 
     private var lastGoodUrl: String? = null
     private var lastOgImage: String? = null
+    @Volatile private var lastPageTitle: String? = null
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val detectorListener: () -> Unit = {
@@ -133,6 +135,11 @@ class BrowserActivity : AppCompatActivity() {
                 customView = null
                 customViewCallback?.onCustomViewHidden()
             }
+
+            override fun onReceivedTitle(view: WebView?, title: String?) {
+                super.onReceivedTitle(view, title)
+                lastPageTitle = title?.trim()?.takeIf { it.isNotEmpty() }
+            }
         }
 
         webView.webViewClient = object : NetSnifferWebViewClient(this@BrowserActivity, webView) {
@@ -141,6 +148,7 @@ class BrowserActivity : AppCompatActivity() {
                 if (url.startsWith("http://") || url.startsWith("https://")) {
                     lastGoodUrl = url
                 }
+                lastPageTitle = view.title?.trim()?.takeIf { it.isNotEmpty() }
                 // Capture og:image for thumbnails
                 refreshOgImage()
                 // Update the "List (count)" button
@@ -505,8 +513,12 @@ class BrowserActivity : AppCompatActivity() {
     }
 
     private fun suggestFriendlyName(url: String): String {
-        val title = (webView.title ?: "").trim()
-        if (title.isNotEmpty() && !title.equals("Post", true)) return sanitizeFileName(title)
+        val title = lastPageTitle?.takeUnless { it.equals("Post", true) }
+        if (title != null) return sanitizeFileName(title)
+        return fallbackNameFromUrl(url)
+    }
+
+    private fun fallbackNameFromUrl(url: String): String {
         return try {
             val u = Uri.parse(url)
             val seg = u.lastPathSegment ?: "video"
