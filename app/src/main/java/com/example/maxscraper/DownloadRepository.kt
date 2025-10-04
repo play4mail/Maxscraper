@@ -9,7 +9,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
-import android.webkit.CookieManager
+import com.example.maxscraper.gatherCookies
 import com.example.maxscraper.net.ParallelDownloader
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -195,6 +195,7 @@ object DownloadRepository {
                 req.addRequestHeader("Origin", "${u.scheme}://${u.host}")
             }
         }
+        gatherCookies(resolved, referer)?.let { req.addRequestHeader("Cookie", it) }
 
         val id = try {
             dm.enqueue(req)
@@ -248,7 +249,6 @@ object DownloadRepository {
         val ua = UserAgent.defaultForWeb(ctx)
         var url = startUrl
         var hops = 0
-        val cookieMgr = CookieManager.getInstance()
         val seen = HashSet<String>()
 
         while (hops < 5) {
@@ -262,7 +262,7 @@ object DownloadRepository {
                 setRequestProperty("Accept-Language", "en-US,en;q=0.9")
                 setRequestProperty("Accept-Encoding", "identity")
                 setRequestProperty("Range", "bytes=0-0")
-                cookieMgr.getCookie(url)?.let { setRequestProperty("Cookie", it) }
+                gatherCookies(url, referer)?.let { setRequestProperty("Cookie", it) }
                 referer?.let {
                     setRequestProperty("Referer", it)
                     val ru = Uri.parse(it)
