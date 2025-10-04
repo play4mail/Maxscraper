@@ -302,11 +302,10 @@ class BrowserActivity : AppCompatActivity() {
     }
 
     private fun filterPlayableMedia(foundUrls: List<String>): List<String> {
-        val mp4s = foundUrls.filter { it.contains(".mp4", true) }
-        val hls = foundUrls.filter { it.contains(".m3u8", true) }
+        val normalized = foundUrls.mapNotNull { normaliseMediaUrl(it) }
+        val mp4s = normalized.filter { it.contains(".mp4", true) }
+        val hls = normalized.filter { it.contains(".m3u8", true) }
         return (if (mp4s.isNotEmpty()) mp4s else hls)
-            .map { it.trim() }
-            .filter { it.startsWith("http://") || it.startsWith("https://") }
             .distinctBy { runCatching { Uri.parse(it).path ?: it }.getOrElse { it } }
     }
 
@@ -409,9 +408,7 @@ class BrowserActivity : AppCompatActivity() {
 
     private fun addIfValid(url: String, bag: MutableSet<String>) {
         val trimmed = url.trim()
-        if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
-            bag += trimmed
-        }
+        normaliseMediaUrl(trimmed)?.let { bag += it }
     }
 
     private fun parseJsonStringArray(jsResult: String?): List<String> {
@@ -456,6 +453,50 @@ class BrowserActivity : AppCompatActivity() {
         var out = s.replace("[\\\\/:*?\"<>|]".toRegex(), " ").trim()
         if (out.isEmpty()) out = "video"
         return out.replace("\\s+".toRegex(), " ")
+    }
+
+    private fun normaliseMediaUrl(raw: String): String? {
+        if (raw.isBlank()) return null
+        val trimmed = raw.trim()
+        if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) return null
+        return normaliseInstagramRanges(trimmed)
+    }
+
+    private fun normaliseInstagramRanges(url: String): String {
+        val uri = runCatching { Uri.parse(url) }.getOrNull() ?: return url
+        val host = uri.host?.lowercase(Locale.US) ?: return url
+        val isInstagramHost = host.contains("instagram.com") || host.contains("cdninstagram") || host.contains("fbcdn")
+        if (!isInstagramHost) return url
+
+        val query = uri.query ?: return url
+        val params = query.split('&')
+        var removedAny = false
+        val kept = mutableListOf<String>()
+        for (part in params) {
+            if (part.isBlank()) continue
+            val key = part.substringBefore('=', part).lowercase(Locale.US)
+            if (key == "bytestart" || key == "byteend" || key == "range") {
+                removedAny = true
+            } else {
+                kept += part
+            }
+        }
+        if (!removedAny) return url
+
+        val base = url.substringBefore('?')
+        val fragment = uri.fragment
+        val rebuilt = buildString {
+            append(base)
+            if (kept.isNotEmpty()) {
+                append('?')
+                append(kept.joinToString("&"))
+            }
+            if (!fragment.isNullOrEmpty()) {
+                append('#')
+                append(fragment)
+            }
+        }
+        return rebuilt
     }
 
     private fun toast(msg: String) =
