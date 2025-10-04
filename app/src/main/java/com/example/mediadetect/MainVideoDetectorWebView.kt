@@ -35,7 +35,8 @@ class MainVideoDetectorWebView @JvmOverloads constructor(
         val ts: Long,
         val isSegment: Boolean,
         val isAd: Boolean,
-        val headers: Map<String,String>
+        val headers: Map<String, String>,
+        val approxBytes: Long,
     )
 
     private val AD_HINT = Regex("(vast|ima|doubleclick|googlesyndication|adservice|prebid)", RegexOption.IGNORE_CASE)
@@ -74,7 +75,19 @@ class MainVideoDetectorWebView @JvmOverloads constructor(
                 if (MEDIA_ANY.containsMatchIn(u)) {
                     val isSeg = SEGMENT.containsMatchIn(u)
                     val isAd = AD_HINT.containsMatchIn(u)
-                    mediaHits.add(Hit(u, System.currentTimeMillis(), isSeg, isAd, request.requestHeaders ?: emptyMap()))
+                    val headers = request.requestHeaders ?: emptyMap()
+                    val approxBytes = headers["Content-Length"]?.toLongOrNull()
+                        ?: if (isSeg) 1_000_000L else 100_000L
+                    mediaHits.add(
+                        Hit(
+                            url = u,
+                            ts = System.currentTimeMillis(),
+                            isSegment = isSeg,
+                            isAd = isAd,
+                            headers = headers,
+                            approxBytes = approxBytes,
+                        )
+                    )
                 }
                 return super.shouldInterceptRequest(view, request)
             }
@@ -88,9 +101,9 @@ class MainVideoDetectorWebView @JvmOverloads constructor(
               try {
                 if (navigator.requestMediaKeySystemAccess) {
                   const orig = navigator.requestMediaKeySystemAccess.bind(navigator);
-                  navigator.requestMediaKeySystemAccess = async function() {
+                  navigator.requestMediaKeySystemAccess = async function(...args) {
                     try { MediaDetect && MediaDetect.markDrm(); } catch(e){}
-                    throw new Error('DRM/EME detected');
+                    return orig(...args);
                   };
                 }
               } catch(e){}
@@ -148,11 +161,16 @@ class MainVideoDetectorWebView @JvmOverloads constructor(
 
         // Pull player probe (async → callback chain to keep it simple)
         evaluateJavascript("window.__probeVideo && JSON.stringify(window.__probeVideo())") { json ->
+            var playerSources: List<String> = emptyList()
             val player = runCatching {
                 if (json == null || json == "null") null else {
                     val o = JSONObject(json)
                     val p = o.getJSONObject("p")
-                    DetectionResult.Player(
+                    val sources = mutableListOf<String>()
+                    o.optString("vjs").takeIf { it.isNotBlank() }?.let { sources += it }
+                    o.optString("jw").takeIf { it.isNotBlank() }?.let { sources += it }
+                    o.optString("hls").takeIf { it.isNotBlank() }?.let { sources += it }
+                    val detPlayer = DetectionResult.Player(
                         currentSrc = p.optString("currentSrc"),
                         paused = p.optBoolean("paused", true),
                         readyState = p.optInt("readyState", 0),
@@ -161,8 +179,36 @@ class MainVideoDetectorWebView @JvmOverloads constructor(
                         width = p.optInt("width", 0),
                         height = p.optInt("height", 0)
                     )
+                    detPlayer.currentSrc?.takeIf { it.isNotBlank() }?.let { sources += it }
+                    playerSources = sources.distinct()
+                    detPlayer
                 }
             }.getOrNull()
+
+            val groupTraffic = groups.mapValues { (_, hits) ->
+                val bytes = hits.sumOf { it.approxBytes }
+                if (bytes > 0) bytes else hits.size.toLong()
+            }
+            val maxTraffic = groupTraffic.values.maxOrNull() ?: 0L
+
+            fun matchesSource(url: String, sources: List<String>): Boolean {
+                if (sources.isEmpty()) return false
+                return sources.any { src ->
+                    if (src.isBlank()) return@any false
+                    if (url.contains(src, ignoreCase = true) || src.contains(url, ignoreCase = true)) return@any true
+                    runCatching {
+                        val srcHost = java.net.URI(src).host
+                        val urlHost = java.net.URI(url).host
+                        if (srcHost.isNullOrBlank() || urlHost.isNullOrBlank()) {
+                            false
+                        } else {
+                            val srcKey = srcHost.split('.').takeLast(2).joinToString(".")
+                            val urlKey = urlHost.split('.').takeLast(2).joinToString(".")
+                            srcHost.equals(urlHost, ignoreCase = true) || srcKey.equals(urlKey, ignoreCase = true)
+                        }
+                    }.getOrDefault(false)
+                }
+            }
 
             // Score candidates
             var bestUrl: String? = null
@@ -170,25 +216,34 @@ class MainVideoDetectorWebView @JvmOverloads constructor(
             var bestItems = mutableListOf<String>()
             var bestSegs = 0
             var bestCadence = 0L
-            var bestHeaders: Map<String,String> = emptyMap()
+            var bestHeaders: Map<String, String> = emptyMap()
+            var bestStreamType = "unknown"
 
-            groups.forEach { (k, list) ->
+            groups.forEach { (key, list) ->
                 var score = 0
                 val items = mutableListOf<String>()
 
-                val isHls = k.contains(Regex("\\.m3u8(\\?|$)", RegexOption.IGNORE_CASE))
-                val isDash = k.contains(Regex("\\.mpd(\\?|$)", RegexOption.IGNORE_CASE))
-                val isMp4 = k.contains(Regex("\\.mp4(\\?|$)", RegexOption.IGNORE_CASE))
+                val representativeUrl = list.firstOrNull { !it.isSegment }?.url ?: key
+                val sampleUrl = representativeUrl.ifBlank { list.firstOrNull()?.url ?: key }
+                val hasTs = list.any { it.url.contains(Regex("\\.ts(\\?|$)", RegexOption.IGNORE_CASE)) }
+                val hasM4s = list.any { it.url.contains(Regex("\\.m4s(\\?|$)", RegexOption.IGNORE_CASE)) }
+                val hasFmp4 = list.any { it.url.contains(Regex("\\.fmp4(\\?|$)", RegexOption.IGNORE_CASE)) }
+                val isHls = sampleUrl.contains(Regex("\\.m3u8(\\?|$)", RegexOption.IGNORE_CASE))
+                val isDash = sampleUrl.contains(Regex("\\.mpd(\\?|$)", RegexOption.IGNORE_CASE))
+                val isMp4 = sampleUrl.contains(Regex("\\.mp4(\\?|$)", RegexOption.IGNORE_CASE))
                 if (isHls) { score += 2; items += "type=hls +2" }
                 if (isDash) { score += 2; items += "type=dash +2" }
                 if (isMp4) { score += 2; items += "type=mp4 +2" }
+                if (!isHls && !isDash && !isMp4 && list.any { it.isSegment }) {
+                    score += 2; items += "segment-group +2"
+                }
 
                 val segTs = list.filter { it.isSegment }.map { it.ts }.sorted()
                 val segs = segTs.size
                 if (segs >= 10) { score += 5; items += "steady segments >=10 +5" }
                 var avg = 0L
                 if (segTs.size > 2) {
-                    val diffs = segTs.zip(segTs.drop(1)).map { (a,b) -> b - a }
+                    val diffs = segTs.zip(segTs.drop(1)).map { (a, b) -> b - a }
                     val mean = diffs.sum().toDouble() / diffs.size
                     avg = mean.roundToLong()
                     if (avg in 2000..8000) { score += 4; items += "cadence ${avg}ms +4" }
@@ -198,37 +253,37 @@ class MainVideoDetectorWebView @JvmOverloads constructor(
                     score -= 4; items += "ad-like host -4"
                 }
 
-                // Correlate with player.currentSrc host (best-effort)
-                player?.currentSrc?.takeIf { it.isNotBlank() }?.let { cs ->
-                    val hostMatch = try {
-                        val a = java.net.URI(cs).host ?: ""
-                        val b = java.net.URI(k).host ?: ""
-                        a.isNotBlank() && b.contains(a.substringAfterLast('.', ""), ignoreCase = true)
-                    } catch (_: Throwable) { false }
-                    if (hostMatch) { score += 4; items += "matches player src host +4" }
+                val playingVisible = player?.let { !it.paused && it.readyState >= 2 && it.inViewport } ?: false
+                if (playingVisible && matchesSource(sampleUrl, playerSources)) {
+                    score += 6; items += "matches playing video +6"
+                }
+
+                val traffic = groupTraffic[key] ?: 0L
+                if (traffic > 0 && traffic == maxTraffic) {
+                    score += 3; items += "top traffic +3"
                 }
 
                 if (score > bestScore) {
                     bestScore = score
-                    bestUrl = k
+                    bestUrl = representativeUrl
                     bestItems = items
                     bestSegs = segs
                     bestCadence = avg
                     bestHeaders = list.firstOrNull()?.headers ?: emptyMap()
+                    bestStreamType = when {
+                        isHls -> "hls"
+                        isDash -> "dash"
+                        isMp4 -> "mp4"
+                        hasTs -> "hls"
+                        hasM4s || hasFmp4 -> "dash"
+                        else -> "unknown"
+                    }
                 }
-            }
-
-            val type = when {
-                bestUrl == null -> "unknown"
-                bestUrl!!.contains(Regex("\\.m3u8(\\?|$)", RegexOption.IGNORE_CASE)) -> "hls"
-                bestUrl!!.contains(Regex("\\.mpd(\\?|$)", RegexOption.IGNORE_CASE)) -> "dash"
-                bestUrl!!.contains(Regex("\\.mp4(\\?|$)", RegexOption.IGNORE_CASE)) -> "mp4"
-                else -> "unknown"
             }
 
             val result = DetectionResult(
                 mediaUrl = bestUrl,
-                streamType = type,
+                streamType = if (bestUrl == null) "unknown" else bestStreamType,
                 drm = false,
                 reason = if (bestUrl == null) "No media detected" else null,
                 evidence = DetectionResult.Evidence(
