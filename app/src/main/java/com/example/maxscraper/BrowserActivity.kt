@@ -477,7 +477,6 @@ class BrowserActivity : AppCompatActivity() {
         val playing = MediaDetector.getPlayingUrls()
         if (playing.isNotEmpty()) {
             playing.forEach { addIfValid(it, ordered) }
-            return ordered.toList()
         }
         MediaDetector.getCandidates().forEach { addIfValid(it, ordered) }
         domUrls.forEach { addIfValid(it, ordered) }
