@@ -16,14 +16,14 @@ import java.net.URL
 object HlsThumbs {
     fun loadInto(view: ImageView, m3u8Url: String) {
         Thread {
-            val bmp = tryMakeThumb(view, m3u8Url)
+            val bmp = fetchBitmap(m3u8Url)
             (view.context as? android.app.Activity)?.runOnUiThread {
                 if (bmp != null) view.setImageBitmap(bmp)
             }
         }.start()
     }
 
-    private fun tryMakeThumb(view: ImageView, m3u8Url: String): Bitmap? {
+    fun fetchBitmap(m3u8Url: String): Bitmap? {
         if (m3u8Url.endsWith(".mp4", true)) return frameFromUrl(m3u8Url)
         val playlist = fetchText(m3u8Url) ?: return null
 

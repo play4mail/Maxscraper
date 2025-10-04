@@ -218,12 +218,16 @@ class BrowserActivity : AppCompatActivity() {
                 title = "Select a video",
                 options = options,
                 onChosen = { chosen ->
-                    val suggested = labels[chosen.url]
-                        ?: ensureMp4Suffix(
-                            base = suggestFriendlyName(chosen.url),
-                            isMp4 = chosen.url.contains(".mp4", true)
-                        )
-                    showSaveAsAndStart(url = chosen.url, suggestedName = suggested)
+                    if (chosen.isHls) {
+                        openHlsPicker(chosen)
+                    } else {
+                        val suggested = labels[chosen.url]
+                            ?: ensureMp4Suffix(
+                                base = suggestFriendlyName(chosen.url),
+                                isMp4 = chosen.url.contains(".mp4", true)
+                            )
+                        showSaveAsAndStart(url = chosen.url, suggestedName = suggested)
+                    }
                 }
             )
         }
@@ -322,13 +326,33 @@ class BrowserActivity : AppCompatActivity() {
                 VideoMetadata.fetchFor(url, buildRequestHeaders(url))
             }.getOrElse { emptyList() }
             val best = chooseBestVariant(variants)
+            val thumb = if (isInstagramUrl(url)) lastOgImage else null
             MediaOption(
                 url = url,
                 label = label,
-                thumbUrl = lastOgImage,
-                meta = buildMetaString(url, best)
+                thumbUrl = thumb,
+                meta = buildMetaString(url, best),
+                isHls = url.contains(".m3u8", true) || variants.any { it.url.contains(".m3u8", true) },
+                variants = variants
             )
         }
+    }
+
+    private fun openHlsPicker(option: MediaOption) {
+        val urls = arrayListOf<String>()
+        if (option.variants.isNotEmpty()) {
+            option.variants.mapTo(urls) { it.url }
+        }
+        if (urls.isEmpty()) {
+            urls += option.url
+        }
+        val distinct = urls.distinct()
+        val extras = arrayListOf<String>()
+        extras.addAll(distinct)
+        startActivity(
+            Intent(this, M3u8Activity::class.java)
+                .putStringArrayListExtra("EXTRA_M3U8_LIST", extras)
+        )
     }
 
     private fun buildRequestHeaders(targetUrl: String): Map<String, String> {
@@ -501,6 +525,14 @@ class BrowserActivity : AppCompatActivity() {
             }
         }
         return rebuilt
+    }
+
+    private fun isInstagramUrl(url: String?): Boolean {
+        if (url.isNullOrBlank()) return false
+        return runCatching { Uri.parse(url).host?.lowercase(Locale.US) }.getOrNull()
+            ?.let { host ->
+                host.contains("instagram.com") || host.contains("cdninstagram") || host.contains("fbcdn")
+            } ?: false
     }
 
     private fun toast(msg: String) =

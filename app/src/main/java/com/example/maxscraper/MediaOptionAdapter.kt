@@ -12,7 +12,9 @@ import androidx.annotation.LayoutRes
 import androidx.appcompat.app.AlertDialog
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.example.maxscraper.HlsThumbs
 import com.example.maxscraper.R
+import com.example.maxscraper.VideoVariant
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -21,13 +23,16 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.concurrent.ConcurrentHashMap
 
 /** Row model for the media chooser dialog. */
 data class MediaOption(
     val url: String,
     val label: String,
     val thumbUrl: String? = null,
-    val meta: String? = null
+    val meta: String? = null,
+    val isHls: Boolean = false,
+    val variants: List<VideoVariant> = emptyList()
 )
 
 /** RecyclerView adapter that renders your existing item_media_option.xml. */
@@ -41,6 +46,7 @@ class MediaOptionAdapter(
 ) : RecyclerView.Adapter<MediaOptionAdapter.VH>() {
 
     private val scope = CoroutineScope(Dispatchers.IO + Job())
+    private val thumbCache = ConcurrentHashMap<String, Bitmap?>()
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
         val v = LayoutInflater.from(parent.context).inflate(rowLayout, parent, false)
@@ -66,18 +72,12 @@ class MediaOptionAdapter(
 
         holder.thumb?.let { iv ->
             iv.setImageDrawable(null)
-            val u = option.thumbUrl
-            if (!u.isNullOrBlank()) {
-                scope.launch {
-                    val bmp = fetchBitmap(u)
-                    withContext(Dispatchers.Main) {
-                        // Use adapterPosition for widest compatibility
-                        val currentPos = holder.adapterPosition
-                        if (currentPos != RecyclerView.NO_POSITION &&
-                            currentPos == position && bmp != null
-                        ) {
-                            iv.setImageBitmap(bmp)
-                        }
+            scope.launch {
+                val bmp = loadThumbnail(option)
+                withContext(Dispatchers.Main) {
+                    val currentPos = holder.adapterPosition
+                    if (currentPos != RecyclerView.NO_POSITION && currentPos == position && bmp != null) {
+                        iv.setImageBitmap(bmp)
                     }
                 }
             }
@@ -98,7 +98,10 @@ class MediaOptionAdapter(
     }
 
     /** Call when dialog dismisses to stop background work. */
-    fun cleanup() = scope.cancel()
+    fun cleanup() {
+        thumbCache.clear()
+        scope.cancel()
+    }
 
     class VH(
         v: View,
@@ -111,7 +114,18 @@ class MediaOptionAdapter(
         val meta: TextView?   = v.findViewById(metaId)
     }
 
-    private fun fetchBitmap(urlStr: String): Bitmap? {
+    private fun loadThumbnail(option: MediaOption): Bitmap? {
+        val cached = thumbCache[option.url]
+        if (cached != null || thumbCache.containsKey(option.url)) return cached
+
+        val bmp = option.thumbUrl?.let { fetchImageBitmap(it) }
+            ?: fetchVideoBitmap(option)
+
+        thumbCache[option.url] = bmp
+        return bmp
+    }
+
+    private fun fetchImageBitmap(urlStr: String): Bitmap? {
         return try {
             val url = URL(urlStr)
             val c = (url.openConnection() as HttpURLConnection).apply {
@@ -124,5 +138,13 @@ class MediaOptionAdapter(
         } catch (_: Throwable) {
             null
         }
+    }
+
+    private fun fetchVideoBitmap(option: MediaOption): Bitmap? {
+        val candidate = when {
+            option.isHls -> option.variants.firstOrNull()?.url ?: option.url
+            else -> option.url
+        }
+        return HlsThumbs.fetchBitmap(candidate)
     }
 }
