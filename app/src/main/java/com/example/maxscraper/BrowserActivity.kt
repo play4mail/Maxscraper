@@ -593,17 +593,62 @@ class BrowserActivity : AppCompatActivity() {
             (function(){
                 try{
                     var urls = [];
+                    var seen = {};
+                    function add(u){
+                        if (!u) return;
+                        var str = ('' + u).trim();
+                        if (!str) return;
+                        var low = str.toLowerCase();
+                        if (low.indexOf('.mp4') < 0 && low.indexOf('.m3u8') < 0) return;
+                        if (seen[str]) return;
+                        seen[str] = true;
+                        urls.push(str);
+                    }
+                    function collectFromValue(val){
+                        if (!val) return;
+                        var str = ('' + val).trim();
+                        if (!str) return;
+                        var matches = str.match(/https?:[^"'\s)]+/gi);
+                        if (matches){
+                            for (var i=0;i<matches.length;i++){
+                                add(matches[i]);
+                            }
+                        } else {
+                            add(str);
+                        }
+                    }
+                    function collectFromElement(el){
+                        if (!el) return;
+                        try { collectFromValue(el.currentSrc || el.src); } catch(e){}
+                        if (el.getAttribute) collectFromValue(el.getAttribute('src'));
+                        if (el.dataset){
+                            for (var key in el.dataset){
+                                if (Object.prototype.hasOwnProperty.call(el.dataset, key)){
+                                    collectFromValue(el.dataset[key]);
+                                }
+                            }
+                        }
+                        if (el.attributes){
+                            for (var i=0;i<el.attributes.length;i++){
+                                var attr = el.attributes[i];
+                                collectFromValue(attr && attr.value);
+                            }
+                        }
+                        if (el.querySelectorAll){
+                            var sources = el.querySelectorAll('source');
+                            for (var j=0;j<sources.length;j++){
+                                collectFromElement(sources[j]);
+                            }
+                        }
+                    }
                     var vids = document.querySelectorAll('video,source');
                     for (var i=0;i<vids.length;i++){
-                        var s = vids[i].src || vids[i].getAttribute('src') || '';
-                        if (s) urls.push(s);
+                        collectFromElement(vids[i]);
                     }
                     var as = document.querySelectorAll('a[href]');
                     for (var j=0;j<as.length;j++){
-                        var h = as[j].href || '';
-                        if (/\.(mp4|m3u8)(\?|$)/i.test(h)) urls.push(h);
+                        collectFromValue(as[j].href || '');
                     }
-                    urls = Array.from(new Set(urls));
                     return JSON.stringify(urls);
                 }catch(e){ return '[]'; }
             })();

@@ -63,31 +63,81 @@ open class NetSnifferWebViewClient(
         // monitors <video> in main doc; some sites swap src after ads
         val js = """
             (function(){
-              function post(u, playing){
-                try {
-                  if (!u) return;
+              function addCandidate(u, bucket, seen){
+                if (!u) return;
+                var str = ('' + u).trim();
+                if (!str) return;
+                var low = str.toLowerCase();
+                if (low.indexOf('.m3u8') < 0 && low.indexOf('.mp4') < 0) return;
+                if (seen[str]) return;
+                seen[str] = true;
+                bucket.push(str);
+              }
+              function collectFromValue(val, bucket, seen){
+                if (!val) return;
+                var str = ('' + val).trim();
+                if (!str) return;
+                var matches = str.match(/https?:[^"'\s)]+/gi);
+                if (matches){
+                  for (var i=0;i<matches.length;i++){
+                    addCandidate(matches[i], bucket, seen);
+                  }
+                } else {
+                  addCandidate(str, bucket, seen);
+                }
+              }
+              function scanElement(el, bucket, seen){
+                if (!el) return;
+                try { collectFromValue(el.currentSrc || el.src, bucket, seen); } catch(e){}
+                if (el.getAttribute) collectFromValue(el.getAttribute('src'), bucket, seen);
+                if (el.dataset){
+                  for (var key in el.dataset){
+                    if (Object.prototype.hasOwnProperty.call(el.dataset, key)){
+                      collectFromValue(el.dataset[key], bucket, seen);
+                    }
+                  }
+                }
+                if (el.attributes){
+                  for (var i=0;i<el.attributes.length;i++){
+                    var attr = el.attributes[i];
+                    collectFromValue(attr && attr.value, bucket, seen);
+                  }
+                }
+                if (el.querySelectorAll){
+                  var sources = el.querySelectorAll('source');
+                  for (var j=0;j<sources.length;j++){
+                    scanElement(sources[j], bucket, seen);
+                  }
+                }
+              }
+              function collectFromElement(el){
+                var bucket = [];
+                var seen = {};
+                scanElement(el, bucket, seen);
+                return bucket;
+              }
+              function postAll(urls, playing){
+                if (!urls || !urls.length) return;
+                for (var i=0;i<urls.length;i++){
+                  var u = urls[i];
                   var low = u ? u.toLowerCase() : '';
-                  if (low.indexOf('.m3u8')<0 && low.indexOf('.mp4')<0) return;
-                  if (playing) window.DetectorBridge.playing(u); else window.DetectorBridge.hit(u);
-                } catch(e){}
+                  if (low.indexOf('.m3u8') < 0 && low.indexOf('.mp4') < 0) continue;
+                  try {
+                    if (playing) window.DetectorBridge.playing(u); else window.DetectorBridge.hit(u);
+                  } catch(e){}
+                }
               }
               function scanDoc(doc){
                 try {
                   var vids = doc.getElementsByTagName('video');
                   for (var i=0;i<vids.length;i++){
                     var v = vids[i];
-                    var src = v.currentSrc || v.src;
-                    if (!src && v.querySelector('source')) src = v.querySelector('source').src;
-                    if (src) post(src, false);
+                    postAll(collectFromElement(v), false);
                     v.addEventListener('playing', function(e){
-                      var s = e.target.currentSrc || e.target.src;
-                      if (!s && e.target.querySelector('source')) s = e.target.querySelector('source').src;
-                      post(s, true);
+                      postAll(collectFromElement(e.target), true);
                     });
                     v.addEventListener('loadedmetadata', function(e){
-                      var s = e.target.currentSrc || e.target.src;
-                      if (!s && e.target.querySelector('source')) s = e.target.querySelector('source').src;
-                      post(s, false);
+                      postAll(collectFromElement(e.target), false);
                     });
                   }
                 } catch(e){}
