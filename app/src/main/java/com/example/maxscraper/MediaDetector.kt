@@ -6,7 +6,8 @@ import java.util.concurrent.ConcurrentHashMap
 data class MediaHit(
     val url: String,
     val ts: Long = System.currentTimeMillis(),
-    var playing: Boolean = false
+    var playing: Boolean = false,
+    var playingSince: Long = 0L
 )
 
 object MediaDetector {
@@ -48,18 +49,36 @@ object MediaDetector {
 
     fun reportPlaying(url: String) {
         report(url)
-        val hit = map[url]
-        if (hit != null && !hit.playing) {
-            hit.playing = true
-            notifyListeners()
+        val hit = map[url] ?: return
+        var changed = false
+        val now = System.currentTimeMillis()
+        val wasPlaying = hit.playing
+        hit.playing = true
+        hit.playingSince = now
+        if (!wasPlaying) changed = true
+        map.values.forEach { other ->
+            if (other !== hit && other.playing) {
+                other.playing = false
+                other.playingSince = 0L
+                changed = true
+            }
         }
+        if (changed) notifyListeners()
     }
 
     fun getCandidates(): List<String> {
-        return map.values.sortedWith(
-            compareByDescending<MediaHit> { it.playing }
-                .thenByDescending { it.ts }
-        ).map { it.url }
+        val hits = map.values.toList()
+        val playing = hits.filter { it.playing }
+            .sortedByDescending { it.playingSince }
+        val rest = hits.filterNot { it.playing }
+            .sortedByDescending { it.ts }
+        return (playing + rest).map { it.url }
+    }
+
+    fun getPlayingUrls(): List<String> {
+        return map.values.filter { it.playing }
+            .sortedByDescending { it.playingSince }
+            .map { it.url }
     }
 
     private fun notifyListeners() {

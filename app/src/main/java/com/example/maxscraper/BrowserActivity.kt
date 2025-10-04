@@ -319,7 +319,10 @@ class BrowserActivity : AppCompatActivity() {
         urls: List<String>,
         labels: Map<String, String>
     ): List<MediaOption> {
-        return urls.map { url ->
+        val built = mutableListOf<Pair<MediaOption, Long>>()
+        val seen = LinkedHashSet<String>()
+
+        urls.forEach { url ->
             val label = labels[url]
                 ?: ensureMp4Suffix(suggestFriendlyName(url), isMp4 = url.contains(".mp4", true))
             val variants = runCatching {
@@ -327,7 +330,8 @@ class BrowserActivity : AppCompatActivity() {
             }.getOrElse { emptyList() }
             val best = chooseBestVariant(variants)
             val thumb = if (isInstagramUrl(url)) lastOgImage else null
-            MediaOption(
+
+            val primaryOption = MediaOption(
                 url = url,
                 label = label,
                 thumbUrl = thumb,
@@ -335,7 +339,46 @@ class BrowserActivity : AppCompatActivity() {
                 isHls = url.contains(".m3u8", true) || variants.any { it.url.contains(".m3u8", true) },
                 variants = variants
             )
+            if (seen.add(url)) {
+                val sizeHint = best?.sizeBytes ?: variants.maxOfOrNull { it.sizeBytes ?: -1L } ?: -1L
+                built += primaryOption to sizeHint
+            }
+
+            if (url.contains(".m3u8", true)) {
+                variants
+                    .filter { it.url.contains(".mp4", true) || MediaFilter.isProbableMp4(it.url) }
+                    .forEach { variant ->
+                        val normalised = normaliseMediaUrl(variant.url) ?: return@forEach
+                        if (seen.add(normalised)) {
+                            val qualityLabel = variant.qualityLabel
+                                .takeIf { it.isNotBlank() && !it.equals("hls", true) }
+                            val mp4LabelBase = suggestFriendlyName(variant.url)
+                            val mp4Label = ensureMp4Suffix(
+                                base = listOf(mp4LabelBase, qualityLabel)
+                                    .filterNotNull()
+                                    .joinToString(" ")
+                                    .trim(),
+                                isMp4 = true
+                            )
+                            val mp4Option = MediaOption(
+                                url = normalised,
+                                label = mp4Label,
+                                thumbUrl = thumb,
+                                meta = buildMetaString(normalised, variant),
+                                isHls = false,
+                                variants = listOf(variant)
+                            )
+                            val mp4Size = variant.sizeBytes ?: best?.sizeBytes ?: -1L
+                            built += mp4Option to mp4Size
+                        }
+                    }
+            }
         }
+
+        return built
+            .distinctBy { it.first.url }
+            .sortedByDescending { it.second }
+            .map { it.first }
     }
 
     private fun openHlsPicker(option: MediaOption) {
@@ -381,9 +424,9 @@ class BrowserActivity : AppCompatActivity() {
     private fun chooseBestVariant(variants: List<VideoVariant>): VideoVariant? {
         if (variants.isEmpty()) return null
         return variants.maxWithOrNull(
-            compareByDescending<VideoVariant> { it.height ?: -1 }
+            compareByDescending<VideoVariant> { it.sizeBytes ?: -1L }
+                .thenByDescending { it.height ?: -1 }
                 .thenByDescending { it.bandwidthbps ?: -1L }
-                .thenByDescending { it.sizeBytes ?: -1L }
         )
     }
 
@@ -427,6 +470,11 @@ class BrowserActivity : AppCompatActivity() {
 
     private fun mergeWithDetector(domUrls: List<String>): List<String> {
         val ordered = LinkedHashSet<String>()
+        val playing = MediaDetector.getPlayingUrls()
+        if (playing.isNotEmpty()) {
+            playing.forEach { addIfValid(it, ordered) }
+            return ordered.toList()
+        }
         MediaDetector.getCandidates().forEach { addIfValid(it, ordered) }
         domUrls.forEach { addIfValid(it, ordered) }
         return ordered.toList()
