@@ -45,6 +45,10 @@
         <activity android:name=".M3u8Activity" android:exported="false" />
         <activity android:name=".SettingsActivity" android:exported="false" />
 
+        <activity
+            android:name="com.example.mediadetect.DetectActivity"
+            android:exported="false" />
+
         <receiver
             android:name=".DownloadCompleteReceiver"
             android:exported="false">
