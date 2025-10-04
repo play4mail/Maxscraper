@@ -26,19 +26,22 @@
             android:id="@+id/title"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textStyle="bold"
-            android:textSize="16sp"
             android:maxLines="1"
             android:ellipsize="end"
-            android:text="1080P" />
+            android:textStyle="bold"
+            android:textSize="16sp" />
 
         <TextView
             android:id="@+id/meta"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text=".mp4 11.8 MB 640x360 0:02:46"
-            android:textSize="13sp"
-            android:maxLines="1"
-            android:ellipsize="end" />
+            android:maxLines="2"
+            android:ellipsize="end"
+            android:textSize="13sp" />
     </LinearLayout>
+
+    <CheckBox
+        android:id="@+id/check"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content" />
 </LinearLayout>

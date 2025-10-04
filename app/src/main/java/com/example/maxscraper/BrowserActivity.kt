@@ -21,8 +21,12 @@ import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
+import androidx.lifecycle.lifecycleScope
 import com.example.maxscraper.ui.MediaOption
 import com.example.maxscraper.ui.MediaPicker
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import java.net.URLDecoder
 import java.util.LinkedHashSet
@@ -190,38 +194,38 @@ class BrowserActivity : AppCompatActivity() {
     }
 
     private fun showMediaPicker(foundUrls: List<String>) {
-        // Prefer MP4; if none, use HLS; dedupe by path
-        val mp4s = foundUrls.filter { it.contains(".mp4", true) }
-        val hls  = foundUrls.filter { it.contains(".m3u8", true) }
-        val preferred = (if (mp4s.isNotEmpty()) mp4s else hls)
-            .map { it.trim() }
-            .filter { it.startsWith("http://") || it.startsWith("https://") }
-            .distinctBy { runCatching { Uri.parse(it).path ?: it }.getOrElse { it } }
-
+        val preferred = filterPlayableMedia(foundUrls)
         if (preferred.isEmpty()) { toast("No playable media links"); return }
 
-        val options = preferred.map { url ->
-            val label = ensureMp4Suffix(suggestFriendlyName(url), isMp4 = url.contains(".mp4", true))
-            MediaOption(
-                url = url,
-                label = label,
-                thumbUrl = lastOgImage, // null is okay; adapter will show no image
-                meta = null
+        val labels = preferred.associateWith { url ->
+            ensureMp4Suffix(
+                base = suggestFriendlyName(url),
+                isMp4 = url.contains(".mp4", true)
             )
         }
 
-        MediaPicker.show(
-            ctx = this,
-            title = "Select a video",
-            options = options,
-            onChosen = { chosen ->
-                val suggested = ensureMp4Suffix(
-                    base = suggestFriendlyName(chosen.url),
-                    isMp4 = chosen.url.contains(".mp4", true)
-                )
-                showSaveAsAndStart(url = chosen.url, suggestedName = suggested)
+        lifecycleScope.launch {
+            val options = withContext(Dispatchers.IO) { buildMediaOptions(preferred, labels) }
+
+            if (options.isEmpty()) {
+                toast("No playable media links")
+                return@launch
             }
-        )
+
+            MediaPicker.show(
+                ctx = this@BrowserActivity,
+                title = "Select a video",
+                options = options,
+                onChosen = { chosen ->
+                    val suggested = labels[chosen.url]
+                        ?: ensureMp4Suffix(
+                            base = suggestFriendlyName(chosen.url),
+                            isMp4 = chosen.url.contains(".mp4", true)
+                        )
+                    showSaveAsAndStart(url = chosen.url, suggestedName = suggested)
+                }
+            )
+        }
     }
 
     // -------------------- Download flow --------------------
@@ -283,7 +287,8 @@ class BrowserActivity : AppCompatActivity() {
 
     private fun updateListCount() {
         fetchPageMedia { urls ->
-            btnList.text = "${getString(R.string.menu_list)} (${urls.size})"
+            val playable = filterPlayableMedia(urls)
+            btnList.text = "${getString(R.string.menu_list)} (${playable.size})"
         }
     }
 
@@ -293,6 +298,81 @@ class BrowserActivity : AppCompatActivity() {
             val merged = mergeWithDetector(fromDom)
             onResult(merged)
         }
+    }
+
+    private fun filterPlayableMedia(foundUrls: List<String>): List<String> {
+        val mp4s = foundUrls.filter { it.contains(".mp4", true) }
+        val hls = foundUrls.filter { it.contains(".m3u8", true) }
+        return (if (mp4s.isNotEmpty()) mp4s else hls)
+            .map { it.trim() }
+            .filter { it.startsWith("http://") || it.startsWith("https://") }
+            .distinctBy { runCatching { Uri.parse(it).path ?: it }.getOrElse { it } }
+    }
+
+    private suspend fun buildMediaOptions(
+        urls: List<String>,
+        labels: Map<String, String>
+    ): List<MediaOption> {
+        val headers = lastGoodUrl?.let { mapOf("Referer" to it) } ?: emptyMap()
+        return urls.map { url ->
+            val label = labels[url]
+                ?: ensureMp4Suffix(suggestFriendlyName(url), isMp4 = url.contains(".mp4", true))
+            val variants = runCatching { VideoMetadata.fetchFor(url, headers) }.getOrElse { emptyList() }
+            val best = chooseBestVariant(variants)
+            MediaOption(
+                url = url,
+                label = label,
+                thumbUrl = lastOgImage,
+                meta = buildMetaString(url, best)
+            )
+        }
+    }
+
+    private fun chooseBestVariant(variants: List<VideoVariant>): VideoVariant? {
+        if (variants.isEmpty()) return null
+        return variants.maxWithOrNull(
+            compareByDescending<VideoVariant> { it.height ?: -1 }
+                .thenByDescending { it.bandwidthbps ?: -1L }
+                .thenByDescending { it.sizeBytes ?: -1L }
+        )
+    }
+
+    private fun buildMetaString(url: String, variant: VideoVariant?): String {
+        val ext = guessExtension(url)
+        val size = formatSizeShort(variant?.sizeBytes)
+        val dims = if (variant?.width != null && variant.height != null) "${variant.width}x${variant.height}" else "—"
+        val duration = VideoMetadata.formatDuration(variant?.durationSec)
+        return listOf(ext, size, dims, duration).joinToString(" ")
+    }
+
+    private fun guessExtension(url: String): String {
+        val primary = runCatching { Uri.parse(url).lastPathSegment }.getOrNull()
+        val ext = primary?.substringAfterLast('.', "").orEmpty()
+            .ifBlank {
+                url.substringAfterLast('.', "").substringBefore('?').substringBefore('#')
+            }
+        return if (ext.isBlank()) "—" else ".${ext.lowercase(Locale.US)}"
+    }
+
+    private fun formatSizeShort(bytes: Long?): String {
+        if (bytes == null || bytes <= 0) return "—"
+        val units = arrayOf("b", "kb", "mb", "gb", "tb")
+        var value = bytes.toDouble()
+        var unitIndex = 0
+        while (value >= 1024 && unitIndex < units.lastIndex) {
+            value /= 1024
+            unitIndex++
+        }
+        if (unitIndex == 0) {
+            return String.format(Locale.US, "%.0f%s", value, units[unitIndex])
+        }
+        val digits = if (value >= 100) 0 else 1
+        val format = if (digits == 0) "%.0f" else "%.1f"
+        var str = String.format(Locale.US, format, value)
+        if (digits > 0) {
+            str = str.trimEnd('0').trimEnd('.')
+        }
+        return str + units[unitIndex]
     }
 
     private fun mergeWithDetector(domUrls: List<String>): List<String> {
