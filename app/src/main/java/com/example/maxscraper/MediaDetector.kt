@@ -11,6 +11,7 @@ data class MediaHit(
 )
 
 object MediaDetector {
+    private const val MAX_TRACKED = 200
     private val ignoredHosts = setOf(
         "redirector.gvt1.com","v12-a.sdn.cz","stream.highwebmedia.com",
         "doppiocdn.com","doppiocdn.org","hesads.akamaized.net","dmxleo.dailymotion.com"
@@ -44,7 +45,10 @@ object MediaDetector {
             if (isIgnoredHost(host)) return
         } catch (_: Throwable) {}
         val added = map.putIfAbsent(url, MediaHit(url)) == null
-        if (added) notifyListeners()
+        if (added) {
+            trimIfNeeded()
+            notifyListeners()
+        }
     }
 
     fun reportPlaying(url: String) {
@@ -83,5 +87,34 @@ object MediaDetector {
 
     private fun notifyListeners() {
         listeners.forEach { it.invoke() }
+    }
+
+    private fun trimIfNeeded() {
+        val overflow = map.size - MAX_TRACKED
+        if (overflow <= 0) return
+
+        var remaining = overflow
+
+        fun removeTargets(targets: List<MediaHit>) {
+            for (hit in targets) {
+                if (remaining <= 0) return
+                if (map.remove(hit.url, hit)) {
+                    remaining--
+                }
+            }
+        }
+
+        // Prefer removing the oldest non-playing hits first.
+        val nonPlaying = map.values
+            .filter { !it.playing }
+            .sortedBy { it.ts }
+        removeTargets(nonPlaying)
+
+        if (remaining > 0) {
+            // Fall back to trimming the oldest entries overall.
+            val oldest = map.values
+                .sortedBy { it.ts }
+            removeTargets(oldest)
+        }
     }
 }
