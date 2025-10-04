@@ -36,6 +36,7 @@ class PlayerActivity : AppCompatActivity() {
 
     private lateinit var video: VideoView
     private lateinit var controls: ViewGroup
+    private lateinit var titleBar: ViewGroup
     private lateinit var btnPlay: ImageButton
     private lateinit var btnBack10: ImageButton
     private lateinit var btnFwd10: ImageButton
@@ -52,6 +53,7 @@ class PlayerActivity : AppCompatActivity() {
 
     private val ui = Handler(Looper.getMainLooper())
     private var ticker: Runnable? = null
+    private lateinit var gestures: GestureDetector
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -65,6 +67,24 @@ class PlayerActivity : AppCompatActivity() {
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
         }
+
+        gestures = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
+            override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+                toggleControlsVisibility()
+                return true
+            }
+
+            override fun onDoubleTap(e: MotionEvent): Boolean {
+                val width = video.width.takeIf { it > 0 } ?: root.width
+                if (width <= 0) return false
+                if (e.x < width / 2f) {
+                    seekBy(-10_000)
+                } else {
+                    seekBy(10_000)
+                }
+                return true
+            }
+        })
 
         // VideoView
         video = VideoView(this).apply {
@@ -94,13 +114,17 @@ class PlayerActivity : AppCompatActivity() {
         }
         root.addView(video)
 
-        // Simple tap toggles controls
-        video.setOnClickListener {
-            controls.visibility = if (controls.visibility == View.VISIBLE) View.GONE else View.VISIBLE
+        video.setOnTouchListener { v, event ->
+            val handled = gestures.onTouchEvent(event)
+            if (!handled && event.action == MotionEvent.ACTION_UP) {
+                v.performClick()
+            }
+            true
         }
+        video.setOnClickListener { toggleControlsVisibility() }
 
         // Title bar
-        val titleBar = LinearLayout(this).apply {
+        titleBar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(12), dp(12), dp(12), dp(8))
@@ -231,7 +255,7 @@ class PlayerActivity : AppCompatActivity() {
                 else android.R.drawable.ic_lock_silent_mode_off)
             }
         }
-        val speedSpinner = Spinner(this).apply {
+        speedSpinner = Spinner(this).apply {
             val speeds = arrayOf("0.5x","0.75x","1.0x","1.25x","1.5x","2.0x")
             adapter = ArrayAdapter(this@PlayerActivity, android.R.layout.simple_spinner_dropdown_item, speeds)
             setSelection(2)
@@ -325,6 +349,14 @@ class PlayerActivity : AppCompatActivity() {
         super.onBackPressed()
     }
 
+    private fun toggleControlsVisibility() {
+        val showing = controls.visibility == View.VISIBLE
+        controls.visibility = if (showing) View.GONE else View.VISIBLE
+        if (isFullscreen) {
+            titleBar.visibility = if (showing) View.GONE else View.VISIBLE
+        }
+    }
+
     private fun startTicker() {
         stopTicker()
         ticker = object : Runnable {
@@ -374,9 +406,13 @@ class PlayerActivity : AppCompatActivity() {
             requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
             controller.hide(WindowInsetsCompat.Type.systemBars())
             controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            titleBar.visibility = View.GONE
+            controls.visibility = View.GONE
         } else {
             requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
             controller.show(WindowInsetsCompat.Type.systemBars())
+            titleBar.visibility = View.VISIBLE
+            controls.visibility = View.VISIBLE
         }
     }
 
