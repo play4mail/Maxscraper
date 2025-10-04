@@ -2,6 +2,8 @@ package com.example.maxscraper
 
 import android.annotation.SuppressLint
 import android.content.Intent
+import android.content.res.ColorStateList
+import android.graphics.Color
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -21,6 +23,7 @@ import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
+import androidx.core.view.ViewCompat
 import androidx.lifecycle.lifecycleScope
 import com.example.maxscraper.ui.MediaOption
 import com.example.maxscraper.ui.MediaPicker
@@ -64,6 +67,10 @@ class BrowserActivity : AppCompatActivity() {
     private val detectorListener: () -> Unit = {
         mainHandler.post { updateListCount() }
     }
+    private var btnListDefaultTint: ColorStateList? = null
+    private var btnListDefaultTextColor: Int = 0
+    private var listFlashReset: Runnable? = null
+    private var lastPlayableCount: Int = 0
 
     // WebChrome fullscreen support
     private var customView: View? = null
@@ -98,6 +105,8 @@ class BrowserActivity : AppCompatActivity() {
         }
         btnRefresh.setOnClickListener { webView.reload() }
         btnList.text = "${getString(R.string.menu_list)} (0)"
+        btnListDefaultTint = ViewCompat.getBackgroundTintList(btnList)
+        btnListDefaultTextColor = btnList.currentTextColor
         MediaDetector.addListener(detectorListener)
 
         webView.settings.apply {
@@ -162,6 +171,7 @@ class BrowserActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         MediaDetector.removeListener(detectorListener)
+        listFlashReset?.let { mainHandler.removeCallbacks(it) }
         super.onDestroy()
     }
 
@@ -302,6 +312,10 @@ class BrowserActivity : AppCompatActivity() {
         fetchPageMedia { urls ->
             val playable = filterPlayableMedia(urls)
             btnList.text = "${getString(R.string.menu_list)} (${playable.size})"
+            if (playable.isNotEmpty() && lastPlayableCount == 0) {
+                flashListButton()
+            }
+            lastPlayableCount = playable.size
         }
     }
 
@@ -318,13 +332,25 @@ class BrowserActivity : AppCompatActivity() {
         val mp4s = trimmed.filter { it.contains(".mp4", true) }
         val hls = trimmed.filter { it.contains(".m3u8", true) }
         val prioritized = when {
-            mp4s.isNotEmpty() && hls.isNotEmpty() -> mp4s + hls
+            hls.isNotEmpty() -> hls
             mp4s.isNotEmpty() -> mp4s
-            else -> hls
+            else -> trimmed
         }
         return prioritized
             .mapNotNull { normaliseMediaUrl(it) }
             .distinctBy { runCatching { Uri.parse(it).path ?: it }.getOrElse { it } }
+    }
+
+    private fun flashListButton() {
+        listFlashReset?.let { mainHandler.removeCallbacks(it) }
+        ViewCompat.setBackgroundTintList(btnList, ColorStateList.valueOf(Color.parseColor("#4CAF50")))
+        btnList.setTextColor(Color.WHITE)
+        val reset = Runnable {
+            ViewCompat.setBackgroundTintList(btnList, btnListDefaultTint)
+            btnList.setTextColor(btnListDefaultTextColor)
+        }
+        listFlashReset = reset
+        mainHandler.postDelayed(reset, 600)
     }
 
     private suspend fun buildMediaOptions(

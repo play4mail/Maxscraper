@@ -6,7 +6,6 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
-import android.widget.CheckBox
 import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
@@ -32,6 +31,7 @@ class M3u8Activity : AppCompatActivity() {
     private lateinit var btnHome: Button
     private val rows = mutableListOf<Row>()
     private lateinit var adapter: RowsAdapter
+    private lateinit var downloadButtonDefaultLabel: String
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -40,6 +40,7 @@ class M3u8Activity : AppCompatActivity() {
         recycler = findViewById(R.id.m3u8Recycler)
         downloadBtn = findViewById(R.id.downloadSelectedButton)
         btnHome = findViewById(R.id.btnHome)
+        downloadButtonDefaultLabel = downloadBtn.text.toString()
 
         adapter = RowsAdapter(rows)
         recycler.layoutManager = LinearLayoutManager(this)
@@ -80,6 +81,7 @@ class M3u8Activity : AppCompatActivity() {
             runOnUiThread {
                 rows.clear(); rows.addAll(out)
                 adapter.notifyDataSetChanged()
+                updateDownloadButtonState()
             }
         }
 
@@ -96,6 +98,8 @@ class M3u8Activity : AppCompatActivity() {
             Toast.makeText(this, "Starting downloads…", Toast.LENGTH_SHORT).show()
             finish()
         }
+
+        updateDownloadButtonState()
     }
 
     private fun guessName(u: String): String {
@@ -111,7 +115,16 @@ class M3u8Activity : AppCompatActivity() {
                 .inflate(R.layout.item_media_option_selectable, parent, false)
             return VH(v)
         }
-        override fun onBindViewHolder(holder: VH, position: Int) = holder.bind(data[position])
+        override fun onBindViewHolder(holder: VH, position: Int) {
+            holder.bind(data[position]) {
+                val pos = holder.bindingAdapterPosition
+                if (pos == RecyclerView.NO_POSITION) return@bind
+                val row = data[pos]
+                row.checked = !row.checked
+                notifyItemChanged(pos)
+                updateDownloadButtonState()
+            }
+        }
         override fun getItemCount(): Int = data.size
     }
 
@@ -119,17 +132,16 @@ class M3u8Activity : AppCompatActivity() {
         private val thumb: ImageView = view.findViewById(R.id.thumb)
         private val title: TextView = view.findViewById(R.id.title)
         private val meta: TextView = view.findViewById(R.id.meta)
-        private val check: CheckBox = view.findViewById(R.id.check)
 
-        fun bind(r: Row) {
+        fun bind(r: Row, onToggle: () -> Unit) {
             title.text = r.quality.ifBlank { "Auto" }
             val dur = if (r.durationSec > 0) " • ${formatDuration(r.durationSec.toLong())}" else ""
             val size = if (r.sizeBytes > 0) " • ~${formatSize(r.sizeBytes)}" else ""
             meta.text = "${r.url.substringBefore('?')}$dur$size"
 
-            check.setOnCheckedChangeListener(null)
-            check.isChecked = r.checked
-            check.setOnCheckedChangeListener { _, isChecked -> r.checked = isChecked }
+            itemView.setOnClickListener { onToggle() }
+            itemView.isActivated = r.checked
+            itemView.alpha = if (r.checked) 1f else 0.7f
 
             if (r.thumb != null) {
                 thumb.setImageBitmap(r.thumb)
@@ -154,5 +166,11 @@ class M3u8Activity : AppCompatActivity() {
             val m = (s / 60).toInt(); s %= 60
             return if (h > 0) String.format("%d:%02d:%02d", h, m, s) else String.format("%d:%02d", m, s.toInt())
         }
+    }
+
+    private fun updateDownloadButtonState() {
+        val count = rows.count { it.checked }
+        downloadBtn.isEnabled = count > 0
+        downloadBtn.text = if (count > 0) "$downloadButtonDefaultLabel ($count)" else downloadButtonDefaultLabel
     }
 }
