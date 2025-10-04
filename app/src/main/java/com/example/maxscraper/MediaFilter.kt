@@ -24,9 +24,12 @@ object MediaFilter {
         val ext = fileExt(low)
         if (ext in BIN_EXTS) return false
         if (ext == "mp4") return true
+        if (MP4_SUFFIX_REGEX.containsMatchIn(low)) return true
         if (MP4_HINTS.any { low.contains(it) }) return true
         return false
     }
+
+    private val MP4_SUFFIX_REGEX = Regex("\\.mp4(?=($|[?#]))")
 
     private fun fileExt(u: String): String {
         return try {

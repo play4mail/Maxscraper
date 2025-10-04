@@ -1,6 +1,7 @@
 package com.example.maxscraper
 
 import java.net.URI
+import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
 data class MediaHit(
@@ -12,9 +13,27 @@ data class MediaHit(
 
 object MediaDetector {
     private const val MAX_TRACKED = 200
-    private val ignoredHosts = setOf(
-        "redirector.gvt1.com","v12-a.sdn.cz","stream.highwebmedia.com",
-        "doppiocdn.com","doppiocdn.org","hesads.akamaized.net","dmxleo.dailymotion.com"
+    private val ignoredHostSuffixes = setOf(
+        "redirector.gvt1.com",
+        "v12-a.sdn.cz",
+        "stream.highwebmedia.com",
+        "doppiocdn.com",
+        "doppiocdn.org",
+        "hesads.akamaized.net",
+        "dmxleo.dailymotion.com",
+        "dailymotion.com",
+        "googleads.g.doubleclick.net",
+        "doubleclick.net",
+        "pagead2.googlesyndication.com",
+        "googlesyndication.com",
+        "hotstar.com",
+        "nsfw.xxx"
+    )
+    private val ignoredHostKeywords = setOf(
+        "googleads",
+        "doubleclick",
+        "nsfw",
+        "hotstar"
     )
     private val map = ConcurrentHashMap<String, MediaHit>() // url -> hit
     private val listeners = java.util.concurrent.CopyOnWriteArraySet<() -> Unit>()
@@ -32,7 +51,13 @@ object MediaDetector {
         listeners -= listener
     }
 
-    fun isIgnoredHost(h: String?): Boolean = h != null && ignoredHosts.any { h.endsWith(it) }
+    fun isIgnoredHost(h: String?): Boolean {
+        if (h.isNullOrBlank()) return false
+        val low = h.lowercase(Locale.US)
+        if (ignoredHostSuffixes.any { low == it || low.endsWith(".$it") }) return true
+        if (ignoredHostKeywords.any { low.contains(it) }) return true
+        return false
+    }
 
     fun report(url: String) {
         val L = url.lowercase()
@@ -41,7 +66,7 @@ object MediaDetector {
         val isMp4 = MediaFilter.isProbableMp4(url)
         if (!isHls && !isMp4) return
         try {
-            val host = URI(url).host?.lowercase()
+            val host = URI(url).host?.lowercase(Locale.US)
             if (isIgnoredHost(host)) return
         } catch (_: Throwable) {}
         val added = map.putIfAbsent(url, MediaHit(url)) == null
