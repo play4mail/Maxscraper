@@ -309,7 +309,11 @@ class BrowserActivity : AppCompatActivity() {
         val trimmed = foundUrls.map { it.trim() }
         val mp4s = trimmed.filter { it.contains(".mp4", true) }
         val hls = trimmed.filter { it.contains(".m3u8", true) }
-        val prioritized = if (mp4s.isNotEmpty()) mp4s else hls
+        val prioritized = when {
+            mp4s.isNotEmpty() && hls.isNotEmpty() -> mp4s + hls
+            mp4s.isNotEmpty() -> mp4s
+            else -> hls
+        }
         return prioritized
             .mapNotNull { normaliseMediaUrl(it) }
             .distinctBy { runCatching { Uri.parse(it).path ?: it }.getOrElse { it } }
