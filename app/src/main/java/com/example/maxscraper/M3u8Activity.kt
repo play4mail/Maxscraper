@@ -117,7 +117,7 @@ class M3u8Activity : AppCompatActivity() {
         }
         override fun onBindViewHolder(holder: VH, position: Int) {
             holder.bind(data[position]) {
-                val pos = holder.bindingAdapterPosition
+                val pos = holder.adapterPosition
                 if (pos == RecyclerView.NO_POSITION) return@bind
                 val row = data[pos]
                 row.checked = !row.checked
