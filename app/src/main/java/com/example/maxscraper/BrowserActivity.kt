@@ -29,6 +29,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import java.net.URLDecoder
+import java.util.LinkedHashMap
 import java.util.LinkedHashSet
 import java.util.Locale
 
@@ -313,11 +314,12 @@ class BrowserActivity : AppCompatActivity() {
         urls: List<String>,
         labels: Map<String, String>
     ): List<MediaOption> {
-        val headers = lastGoodUrl?.let { mapOf("Referer" to it) } ?: emptyMap()
         return urls.map { url ->
             val label = labels[url]
                 ?: ensureMp4Suffix(suggestFriendlyName(url), isMp4 = url.contains(".mp4", true))
-            val variants = runCatching { VideoMetadata.fetchFor(url, headers) }.getOrElse { emptyList() }
+            val variants = runCatching {
+                VideoMetadata.fetchFor(url, buildRequestHeaders(url))
+            }.getOrElse { emptyList() }
             val best = chooseBestVariant(variants)
             MediaOption(
                 url = url,
@@ -326,6 +328,29 @@ class BrowserActivity : AppCompatActivity() {
                 meta = buildMetaString(url, best)
             )
         }
+    }
+
+    private fun buildRequestHeaders(targetUrl: String): Map<String, String> {
+        val headers = LinkedHashMap<String, String>()
+        headers["User-Agent"] = UserAgent.defaultForWeb(this)
+        headers["Accept"] = "*/*"
+        headers["Accept-Encoding"] = "identity"
+        headers["Accept-Language"] = "en-US,en;q=0.9"
+
+        val referer = lastGoodUrl
+        if (!referer.isNullOrBlank()) {
+            headers["Referer"] = referer
+            runCatching { Uri.parse(referer) }.getOrNull()?.let { refUri ->
+                val scheme = refUri.scheme
+                val host = refUri.host
+                if (!scheme.isNullOrBlank() && !host.isNullOrBlank()) {
+                    headers["Origin"] = "$scheme://$host"
+                }
+            }
+        }
+
+        gatherCookies(targetUrl, referer)?.let { headers["Cookie"] = it }
+        return headers
     }
 
     private fun chooseBestVariant(variants: List<VideoVariant>): VideoVariant? {

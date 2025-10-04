@@ -5,6 +5,7 @@ import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.database.Cursor
+import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
@@ -143,9 +144,19 @@ object DownloadRepository {
         val values = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, displayName)
             put(MediaStore.MediaColumns.MIME_TYPE, mime)
+            val size = src.length()
+            if (size > 0L) put(MediaStore.MediaColumns.SIZE, size)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
                 put(MediaStore.MediaColumns.IS_PENDING, 1)
+            }
+        }
+
+        if (mime.startsWith("video/")) {
+            extractVideoMetadata(src)?.let { meta ->
+                meta.durationMs?.let { values.put(MediaStore.Video.Media.DURATION, it) }
+                meta.width?.let { values.put(MediaStore.Video.Media.WIDTH, it) }
+                meta.height?.let { values.put(MediaStore.Video.Media.HEIGHT, it) }
             }
         }
 
@@ -165,6 +176,24 @@ object DownloadRepository {
         }
         return itemUri
     }
+
+    private fun extractVideoMetadata(src: File): VideoMeta? {
+        val retriever = MediaMetadataRetriever()
+        return try {
+            retriever.setDataSource(src.absolutePath)
+            val durationMs = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()
+            val width = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull()
+            val height = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull()
+            if (durationMs == null && width == null && height == null) null
+            else VideoMeta(durationMs, width, height)
+        } catch (_: Throwable) {
+            null
+        } finally {
+            runCatching { retriever.release() }
+        }
+    }
+
+    private data class VideoMeta(val durationMs: Long?, val width: Int?, val height: Int?)
 
     // -------- DownloadManager path with fast failure detection
     private suspend fun tryDownloadManagerResolvedIO(
